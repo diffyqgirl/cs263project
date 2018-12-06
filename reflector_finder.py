@@ -4,4 +4,5 @@ def bitsofbyte(byte):
 def isrefl(stream):
   if stream[0] is not 0xff:
     return False
-  bits = bitsofbyte(stream[1])
+  bits = stream[1]
+  return (bits >= 0b00010000) and (bits <= 0b11101111)
