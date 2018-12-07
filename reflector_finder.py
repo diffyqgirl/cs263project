@@ -95,7 +95,7 @@ def objdump(s):
 
 def obj_extract(l):
   r = re.compile("(?P<addr>.+):(?:\s+[0-9a-f]{2})+\s+(?P<instr>.+)")
-  return
+  return # TODO
 
 def obj_is_refl(l):
   '*' in l
@@ -116,3 +116,22 @@ def get_all_cp_refls(s):
       if ob is not None:
         objs.push((s.ix, ob))
   return objs
+
+def extract_bytes(l):
+  ll = l[8:35].split(' ')
+  r = ''
+  for w in ll:
+    r += bytes.fromhex(w).decode('utf-8')
+  return r
+
+def get_text_segment(f):
+  d = stream.baseaddr + stream.ix
+  res = subprocess.run(['objdump', '-j', '.text', '-s',
+                        stream.file], stdout=subprocess.PIPE)
+  out = res.stdout.decode('utf-8')
+  bs = ''
+  ls = out.splitlines()[4:-1]
+  off = bytes.fromhex(ls[0][1:8]).decode('utf-8')
+  for l in ls:
+    bs += extract_bytes(l)
+  return Stream(bs, f, off)
