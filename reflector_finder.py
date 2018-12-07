@@ -1,12 +1,12 @@
 import subprocess
 import re
 class Stream:
-  def __init__(self, arr, file='', baseaddr=0, ix=0):
+  def __init__(self, arr, f='', baseaddr=0, ix=0):
     self.arr = arr
     self.ix = ix
-    self.file = file
+    self.filename = f
     self.baseaddr = baseaddr
-    self.ixt = type ix
+    self.ixt = type(ix)
     self.killed = False
   def __add__(self, ix):
     return Stream(self.arr, ix + self.ix)
@@ -127,6 +127,25 @@ def extract_bytes(l):
 def get_text_segment(f):
   d = stream.baseaddr + stream.ix
   res = subprocess.run(['objdump', '-j', '.text', '-s',
+                        stream.filename], stdout=subprocess.PIPE)
+  out = res.stdout.decode('utf-8')
+  bs = ''
+  ls = out.splitlines()[4:-1]
+  off = bytes.fromhex(ls[0][1:8]).decode('utf-8')
+  for l in ls:
+    bs += extract_bytes(l)
+  return Stream(bs, f, off)
+
+def extract_bytes(l):
+  ll = l[8:35].split(' ')
+  r = ''
+  for w in ll:
+    r += bytes.fromhex(w).decode('utf-8')
+  return r
+
+def get_text_segment(f):
+   d = stream.baseaddr + stream.ix
+  res = subprocess.run(['objdump', '-j', '.text', '-s',
                         stream.file], stdout=subprocess.PIPE)
   out = res.stdout.decode('utf-8')
   bs = ''
@@ -135,3 +154,8 @@ def get_text_segment(f):
   for l in ls:
     bs += extract_bytes(l)
   return Stream(bs, f, off)
+if __name__ == "__main__":
+    s = get_text_segment(argv[0])
+    objs = get_all_cp_refls(s)
+    for (addr, contents) in objs:
+        print(hex(addr) + ": " + contents)
