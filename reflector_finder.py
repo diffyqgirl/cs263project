@@ -1,11 +1,11 @@
-def bits_of_byte(byte):
-  """Coerce a byte into a [Bit] format, where Bit = Bool"""
-  return [(byte & (1 << i)) != 0 for i in range(8)]
-
+import subprocess
+import re
 class Stream:
-  def __init__(self, arr, ix=0):
+  def __init__(self, arr, file='', baseaddr=0, ix=0):
     self.arr = arr
     self.ix = ix
+    self.file = file
+    self.baseaddr = baseaddr
     self.ixt = type ix
   def __add__(self, ix):
     return Stream(self.arr, ix + self.ix)
@@ -32,23 +32,23 @@ class Stream:
                             ix.step)]
   
 
-def is_refl(stream):
+def bin_is_refl(stream):
   """Checks if the stream begins with a reflector gadget opcode"""
   if stream[0] is not 0xff:
     return False
-  bits = stream[1]
-  return (bits >= 0b00_010_000) and (bits <= 0b11_101_111)
+  bits = stream[1] & 0b00_111_000
+  return (bits >= 0b00_010_000) and (bits <= 0b00_101_000)
 
-def is_call(stream):
-  """Checks if the stream begins with a call of any type (for finding call-preceded ones)"""
+def bin_is_call(stream):
+  """Checks if the stream begins with a call of any type (for finding call-preceded gadgets)"""
   if stream[0] is 0xe8:
     return True
   elif stream[1] is 0xff:
-    bits = stream[1]
-    return (bits >= 0b00_010_000) and (bits <= 0b11_011_111)
+    bits = stream[1] & 0b00_111_000
+    return (bits >= 0b00_010_000) and (bits <= 0b00_011_000)
   else:
     return False
-  
+
 def next_with(p,stream):
   """
   Finds the next stream location with property p; 
@@ -76,3 +76,30 @@ def last_with(p, stream):
       return stream
     stream -= 1
   return stream
+
+def objdump_string(stream):
+  d = stream.baseaddr + stream.ix
+  res = subprocess.run(['objdump', '-d', 
+                        '--start-address=' + str(d), 
+                        '--stop-address=' + str(d + 0x40),
+                        stream.file], stdout=subprocess.PIPE)
+  return res.stdout.decode('utf-8')
+
+def objdump(s):
+  string = objdump_string(s)
+  ls = string.splitlines()
+  return ls
+
+def obj_extract(l):
+  r = re.compile("(?P<addr>.+):(?:\s+[0-9a-f]{2})+\s+(?P<instr>.+)")
+  return
+
+def obj_is_refl(l):
+  '*' in l
+
+def objdump_if_refl(s):
+  ob = objdump(s)
+  for l in ob:
+    if obj_is_refl(l):
+      return ob
+  return None
