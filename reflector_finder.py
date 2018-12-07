@@ -7,6 +7,7 @@ class Stream:
     self.file = file
     self.baseaddr = baseaddr
     self.ixt = type ix
+    self.killed = False
   def __add__(self, ix):
     return Stream(self.arr, ix + self.ix)
   def __sub__(self, ix):
@@ -30,7 +31,8 @@ class Stream:
       return self.arr[slice(self.ix + ix.start if ix.start else None, 
                             self.ix + ix.stop if ix.stop else None,
                             ix.step)]
-  
+  def kill(self):
+    self.killed = True
 
 def bin_is_refl(stream):
   """Checks if the stream begins with a reflector gadget opcode"""
@@ -73,6 +75,7 @@ def last_with(p, stream):
     try:
       b = p(stream)
     except IndexError:
+      stream.kill()
       return stream
     stream -= 1
   return stream
@@ -103,3 +106,13 @@ def objdump_if_refl(s):
     if obj_is_refl(l):
       return ob
   return None
+
+def get_all_cp_refls(s):
+  objs = []
+  while not s.killed:
+    s = next_with(bin_is_call, s)
+    if not s.killed:
+      ob = objdump_if_refl(s)
+      if ob is not None:
+        objs.push((s.ix, ob))
+  return objs
