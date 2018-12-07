@@ -1,5 +1,6 @@
 import subprocess
 import re
+import sys
 class Stream:
   def __init__(self, arr, f='', baseaddr=0, ix=0):
     self.arr = arr
@@ -9,9 +10,9 @@ class Stream:
     self.ixt = type(ix)
     self.killed = False
   def __add__(self, ix):
-    return Stream(self.arr, ix + self.ix)
+    return Stream(self.arr, self.filename, self.baseaddr, ix + self.ix)
   def __sub__(self, ix):
-    return Stream(self.arr, ix - self.ix)
+    return Stream(self.arr, self.filename, self.baseaddr, ix - self.ix)
   def __iadd__(self,ix):
     self.ix += ix
     return self
@@ -26,11 +27,19 @@ class Stream:
     return self.arr[oix]
   def __getitem__(self, ix):
     if isinstance(ix, self.ixt):
-      return self.arr[ix]
+      try:
+        return self.arr[self.ix + ix]
+      except IndexError:
+        self.kill()
+        raise IndexError
     else:
-      return self.arr[slice(self.ix + ix.start if ix.start else None, 
+      try:
+        return self.arr[slice(self.ix + ix.start if ix.start else None, 
                             self.ix + ix.stop if ix.stop else None,
                             ix.step)]
+      except IndexError:
+        self.kill()
+        raise IndexError
   def kill(self):
     self.killed = True
 
@@ -43,6 +52,7 @@ def bin_is_refl(stream):
 
 def bin_is_call(stream):
   """Checks if the stream begins with a call of any type (for finding call-preceded gadgets)"""
+  # print(chr(stream[0]) + chr(stream[1]))
   if stream[0] is 0xe8:
     return True
   elif stream[1] is 0xff:
@@ -58,11 +68,12 @@ def next_with(p,stream):
   """
   b = False
   while not b:
+    stream += 1
     try:
       b = p(stream)
     except IndexError:
+      stream.kill()
       return stream
-    stream += 1
   return stream
 
 def last_with(p, stream):
@@ -72,20 +83,20 @@ def last_with(p, stream):
   """
   b = False
   while not b:
+    stream -= 1
     try:
       b = p(stream)
     except IndexError:
       stream.kill()
       return stream
-    stream -= 1
   return stream
 
 def objdump_string(stream):
   d = stream.baseaddr + stream.ix
   res = subprocess.run(['objdump', '-d', 
                         '--start-address=' + str(d), 
-                        '--stop-address=' + str(d + 0x40),
-                        stream.file], stdout=subprocess.PIPE)
+                        '--stop-address=' + str(d + 0x80),
+                        stream.filename], stdout=subprocess.PIPE)
   return res.stdout.decode('utf-8')
 
 def objdump(s):
@@ -117,45 +128,26 @@ def get_all_cp_refls(s):
         objs.push((s.ix, ob))
   return objs
 
-def extract_bytes(l):
-  ll = l[8:35].split(' ')
-  r = ''
-  for w in ll:
-    r += bytes.fromhex(w).decode('utf-8')
-  return r
-
 def get_text_segment(f):
-  d = stream.baseaddr + stream.ix
   res = subprocess.run(['objdump', '-j', '.text', '-s',
-                        stream.filename], stdout=subprocess.PIPE)
+                        f], stdout=subprocess.PIPE)
   out = res.stdout.decode('utf-8')
-  bs = ''
+  bs = b''
   ls = out.splitlines()[4:-1]
-  off = bytes.fromhex(ls[0][1:8]).decode('utf-8')
+  off = int.from_bytes(bytes.fromhex(ls[0][1:7]), byteorder=sys.byteorder)
   for l in ls:
     bs += extract_bytes(l)
   return Stream(bs, f, off)
 
 def extract_bytes(l):
   ll = l[8:35].split(' ')
-  r = ''
+  r = b''
   for w in ll:
-    r += bytes.fromhex(w).decode('utf-8')
+    r += bytes.fromhex(w)
   return r
 
-def get_text_segment(f):
-   d = stream.baseaddr + stream.ix
-  res = subprocess.run(['objdump', '-j', '.text', '-s',
-                        stream.file], stdout=subprocess.PIPE)
-  out = res.stdout.decode('utf-8')
-  bs = ''
-  ls = out.splitlines()[4:-1]
-  off = bytes.fromhex(ls[0][1:8]).decode('utf-8')
-  for l in ls:
-    bs += extract_bytes(l)
-  return Stream(bs, f, off)
 if __name__ == "__main__":
-    s = get_text_segment(argv[0])
+    s = get_text_segment(sys.argv[1])
     objs = get_all_cp_refls(s)
     for (addr, contents) in objs:
-        print(hex(addr) + ": " + contents)
+        print(('0x%8x' % addr) + ":\n--------\n" + contents.join('\n'))
