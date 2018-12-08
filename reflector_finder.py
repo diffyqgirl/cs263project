@@ -1,6 +1,9 @@
 import subprocess
 import re
 import sys
+
+call_only = True
+
 class Stream:
   def __init__(self, arr, f='', baseaddr=0, ix=0):
     self.arr = arr
@@ -98,7 +101,7 @@ def objdump_string(stream):
   # print(str(d))
   res = subprocess.run(['objdump', '-d', 
                         '--start-address=' + str(d), 
-                        '--stop-address=' + str(d + 0x80),
+                        '--stop-address=' + str(d + 0x20),
                         stream.filename], stdout=subprocess.PIPE)
   return res.stdout.decode('utf-8')
 
@@ -131,8 +134,9 @@ def objdump_if_refl(s, t=False):
 def get_all_cp_refls(s):
   objs = []
   b = True
+  f = bin_is_call if call_only else bin_is_refl
   while not s.killed:
-    s = next_with(bin_is_call, s)
+    s = next_with(f, s)
     if not s.killed:
       ob = objdump_if_refl(s)
       if ob is not None:
