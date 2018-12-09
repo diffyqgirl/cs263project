@@ -101,7 +101,7 @@ def objdump_string(stream):
   # print(str(d))
   res = subprocess.run(['objdump', '-d', 
                         '--start-address=' + str(d), 
-                        '--stop-address=' + str(d + 0x20),
+                        '--stop-address=' + str(d + 0x40),
                         stream.filename], stdout=subprocess.PIPE)
   return res.stdout.decode('utf-8')
 
@@ -127,7 +127,7 @@ def objdump_if_refl(s, t=False):
   b = False
   for l in ob:
     b = b or obj_is_refl(l)
-    if obj_is_ret(l):
+    if obj_is_refl(l):
       return ob if b else None
   return None
 
